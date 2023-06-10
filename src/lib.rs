@@ -1,10 +1,37 @@
 use std::{collections::HashMap, error::Error, fs::File, io::Read};
 
 use chrono::Duration;
+use clap::{arg, value_parser, ArgMatches, Command};
 use csv::{Reader, StringRecord};
 
 fn round_to_hundredth(num: f64) -> f64 {
     (num * 100.0).round() / 100.0
+}
+
+pub fn parse_args() -> ArgMatches {
+    Command::new("bee-rs")
+        .version("0.1.0")
+        .author("Bee-RS <@kbonnici>")
+        .about("Generates an invoice from a CSV file")
+        .arg(
+            arg!(-p --pay_rate <VALUE>)
+                .required(true)
+                .value_parser(value_parser!(f64))
+                .help("The pay rate for the invoice"),
+        )
+        .arg(
+            arg!(-g --gst <VALUE>)
+                .required(false)
+                .default_value("0.05")
+                .value_parser(value_parser!(f64))
+                .help("The GST percentage for the invoice"),
+        )
+        .arg(
+            arg!(-f --file <FILE>)
+                .required(true)
+                .help("The CSV file to read from"),
+        )
+        .get_matches()
 }
 pub struct Invoice {
     time_entries: HashMap<String, f64>,
