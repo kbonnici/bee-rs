@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .required(false)
                 .default_value("0.05")
                 .value_parser(value_parser!(f64))
-                .help("The pay rate for the invoice"),
+                .help("The GST percentage for the invoice"),
         )
         .arg(
             arg!(-f --file <FILE>)
