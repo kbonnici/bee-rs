@@ -11,6 +11,8 @@ to be inserted into an invoice, such as the following:
 * GST applied
 * Grand total
 
+Using this tool will allow you to focus on more important things, like drinking beer 🍻
+
 ### Requirements
 * A CSV file generated from the Toggl time-tracking app
 
