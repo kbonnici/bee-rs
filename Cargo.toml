@@ -6,7 +6,7 @@ license = "GPL-3.0"
 description = "Parse Toggl time-tracking CSV files to generate invoices"
 repository = "https://github.com/kbonnici/bee-rs"
 readme = "README.md"
-keywords = ["toggl", "csv", "invoice", "time-tracking", "time", "tracking", "bee"]
+keywords = ["toggl", "csv", "invoice", "time-tracking", "beers"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
