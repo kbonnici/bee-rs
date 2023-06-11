@@ -17,6 +17,11 @@ to be inserted into an invoice, such as the following:
 ### Requirements
 * A CSV file generated from the Toggl time-tracking app
 
+### Installation
+```
+cargo install pint-rs
+```
+
 ### Usage
 ```
 pint-rs --file <FILE_PATH> --gst <GST> --pay_rate <PAY_RATE>
