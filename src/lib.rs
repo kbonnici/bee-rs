@@ -5,6 +5,9 @@ use csv::Reader;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+#[cfg(test)]
+mod tests;
+
 /// Generates an invoice from a CSV file
 #[derive(Parser, Debug)]
 #[command(author, version, about)]
@@ -29,12 +32,14 @@ fn round_to_hundredth(num: f64) -> f64 {
     (num * 100.0).round() / 100.0
 }
 
+#[derive(Debug, PartialEq)]
 pub struct InvoiceBuilder {
     project_hours_logged: HashMap<String, f64>,
     pay_rate: f64,
     gst_rate: f64,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct Invoice {
     project_hours_logged: HashMap<String, f64>,
     total_time: f64,
