@@ -31,22 +31,22 @@ fn round_to_hundredth(num: f64) -> f64 {
 
 pub struct Invoice {
     time_entries: HashMap<String, f64>,
-    total_time: f64,
-    subtotal: f64,
-    total: f64,
+    calculated_total_time: f64,
+    calculated_subtotal: f64,
+    calculated_total: f64,
+    calculated_gst: f64,
     pay_rate: f64,
     gst_rate: f64,
-    gst: f64,
 }
 
 impl Invoice {
     fn new(args: &Args) -> Self {
         Invoice {
             time_entries: HashMap::new(),
-            total_time: 0.0,
-            subtotal: 0.0,
-            total: 0.0,
-            gst: 0.0,
+            calculated_total_time: 0.0,
+            calculated_subtotal: 0.0,
+            calculated_total: 0.0,
+            calculated_gst: 0.0,
             pay_rate: args.pay_rate,
             gst_rate: args.gst.unwrap_or(0.0),
         }
@@ -70,10 +70,15 @@ impl Invoice {
     fn parse_duration(string_record: &StringRecord) -> Result<Duration, Box<dyn Error>> {
         let time_str = &string_record[3];
         let time_parts: Vec<&str> = time_str.split(':').collect();
-        let hours = time_parts[0].parse::<i64>()?;
-        let minutes = time_parts[1].parse::<i64>()?;
-        let seconds = time_parts[2].parse::<i64>()?;
-        Ok(Duration::hours(hours) + Duration::minutes(minutes) + Duration::seconds(seconds))
+
+        let hours: i64 = time_parts[0].parse()?;
+        let minutes: i64 = time_parts[1].parse()?;
+        let seconds: i64 = time_parts[2].parse()?;
+
+        let duration =
+            Duration::hours(hours) + Duration::minutes(minutes) + Duration::seconds(seconds);
+
+        Ok(duration)
     }
 
     fn calculate_total_time(&mut self) -> Result<f64, Box<dyn Error>> {
@@ -91,22 +96,15 @@ impl Invoice {
         for result in reader.records() {
             let record = result?;
             let project = &record[0];
+            let duration = Self::parse_duration(&record)?;
 
-            match self.time_entries.get(project) {
-                Some(time) => {
-                    let duration = Self::parse_duration(&record)?;
-                    self.time_entries.insert(
-                        project.to_string(),
-                        round_to_hundredth(time + duration.num_seconds() as f64 / 3600.0),
-                    );
-                }
-                None => {
-                    let duration = Self::parse_duration(&record)?;
-                    self.time_entries.insert(
-                        project.to_string(),
-                        round_to_hundredth(duration.num_seconds() as f64 / 3600.0),
-                    );
-                }
+            if let Some(time) = self.time_entries.get_mut(project) {
+                *time += round_to_hundredth(duration.num_seconds() as f64 / 3600.0)
+            } else {
+                self.time_entries.insert(
+                    project.to_string(),
+                    round_to_hundredth(duration.num_seconds() as f64 / 3600.0),
+                );
             }
         }
 
@@ -114,12 +112,12 @@ impl Invoice {
     }
 
     fn calculate_invoice(&mut self) -> Result<(), Box<dyn Error>> {
-        self.total_time = self.calculate_total_time()?;
+        self.calculated_total_time = self.calculate_total_time()?;
 
-        self.subtotal = round_to_hundredth(self.total_time * self.pay_rate);
-        self.gst = round_to_hundredth(self.subtotal * self.gst_rate);
-
-        self.total = self.subtotal + (self.subtotal * self.gst_rate);
+        self.calculated_subtotal = round_to_hundredth(self.calculated_total_time * self.pay_rate);
+        self.calculated_gst = round_to_hundredth(self.calculated_subtotal * self.gst_rate);
+        self.calculated_total =
+            self.calculated_subtotal + (self.calculated_subtotal * self.gst_rate);
 
         Ok(())
     }
@@ -139,19 +137,22 @@ impl std::fmt::Display for Invoice {
         // Format the totals
         output.push_str(&format!(
             "\n{:<30} {:>10.2}\n\n",
-            "Total Time (h)", self.total_time
+            "Total Time (h)", self.calculated_total_time
         ));
         output.push_str(&format!(
             "{:<30} {:>10.2}\n",
             &format!("Subtotal at ${}/hr", self.pay_rate),
-            self.subtotal
+            self.calculated_subtotal
         ));
         output.push_str(&format!(
             "{:<30} {:>10.2}\n",
             &format!("GST at {}%", self.gst_rate * 100.0),
-            self.gst
+            self.calculated_gst
         ));
-        output.push_str(&format!("{:<30} {:>10.2}\n", "TOTAL", self.total));
+        output.push_str(&format!(
+            "{:<30} {:>10.2}\n",
+            "TOTAL", self.calculated_total
+        ));
 
         write!(f, "{}", output)
     }
