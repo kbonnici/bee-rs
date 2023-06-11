@@ -1,5 +1,5 @@
 use chrono::Duration;
-use csv::{Reader, StringRecord};
+use csv::Reader;
 use std::{collections::HashMap, error::Error};
 
 use clap::Parser;
@@ -14,62 +14,103 @@ use std::path::PathBuf;
 pub struct Args {
     /// The pay rate for the invoice
     #[arg(short, long)]
-    pay_rate: f64,
+    pub pay_rate: f64,
 
     /// The GST percentage for the invoice
     #[arg(short, long)]
-    gst: Option<f64>,
+    pub gst: Option<f64>,
 
     /// The CSV file to read from
     #[arg(short, long, value_name = "FILE")]
-    file: PathBuf,
+    pub file: PathBuf,
 }
 
 fn round_to_hundredth(num: f64) -> f64 {
     (num * 100.0).round() / 100.0
 }
 
-pub struct Invoice {
-    time_entries: HashMap<String, f64>,
-    calculated_total_time: f64,
-    calculated_subtotal: f64,
-    calculated_total: f64,
-    calculated_gst: f64,
+pub struct InvoiceBuilder {
+    project_hours_logged: HashMap<String, f64>,
     pay_rate: f64,
     gst_rate: f64,
 }
 
-impl Invoice {
-    fn new(args: &Args) -> Self {
-        Invoice {
-            time_entries: HashMap::new(),
-            calculated_total_time: 0.0,
-            calculated_subtotal: 0.0,
-            calculated_total: 0.0,
-            calculated_gst: 0.0,
+pub struct Invoice {
+    project_hours_logged: HashMap<String, f64>,
+    total_time: f64,
+    subtotal: f64,
+    gst: f64,
+    total: f64,
+
+    gst_rate: f64,
+    pay_rate: f64,
+}
+
+impl InvoiceBuilder {
+    pub fn new(args: &Args) -> Self {
+        Self {
+            project_hours_logged: HashMap::new(),
             pay_rate: args.pay_rate,
             gst_rate: args.gst.unwrap_or(0.0),
         }
     }
 
-    pub fn get_invoice(args: &Args) -> Result<Self, Box<dyn Error>> {
-        let mut invoice = Self::new(args);
+    pub fn build(&self) -> Invoice {
+        let total_time = round_to_hundredth(self.project_hours_logged.iter().map(|(_, t)| t).sum());
 
-        let contents = std::fs::read(&args.file)?;
+        let subtotal = round_to_hundredth(total_time * self.pay_rate);
+        let gst = round_to_hundredth(subtotal * self.gst_rate);
+
+        let total = subtotal + gst;
+
+        Invoice {
+            project_hours_logged: self.project_hours_logged.clone(),
+            total_time,
+            subtotal,
+            gst,
+            total,
+
+            gst_rate: self.gst_rate,
+            pay_rate: self.pay_rate,
+        }
+    }
+
+    pub fn add_project_duration(&mut self, project: &str, duration: &Duration) -> &mut Self {
+        if let Some(time) = self.project_hours_logged.get_mut(project) {
+            *time += round_to_hundredth(duration.num_seconds() as f64 / 3600.0)
+        } else {
+            self.project_hours_logged.insert(
+                project.to_owned(),
+                round_to_hundredth(duration.num_seconds() as f64 / 3600.0),
+            );
+        }
+
+        self
+    }
+
+    pub fn collect_time_entries(&mut self, entries: &[(String, Duration)]) -> &mut Self {
+        for (project, duration) in entries {
+            self.add_project_duration(&project, duration);
+        }
+
+        self
+    }
+
+    pub fn import_csv(&mut self, file: &PathBuf) -> Result<&mut Self, Box<dyn Error>> {
+        let contents = std::fs::read(file)?;
 
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
             .from_reader(contents.as_slice());
 
-        invoice.calculate_time_per_entry(&mut reader)?;
-        invoice.calculate_invoice()?;
+        let entries = Self::parse_csv_entries(&mut reader)?;
+        self.collect_time_entries(&entries);
 
-        Ok(invoice)
+        Ok(self)
     }
 
-    fn parse_duration(string_record: &StringRecord) -> Result<Duration, Box<dyn Error>> {
-        let time_str = &string_record[3];
-        let time_parts: Vec<&str> = time_str.split(':').collect();
+    fn parse_duration_str(str: &str) -> Result<Duration, Box<dyn Error>> {
+        let time_parts: Vec<&str> = str.split(':').collect();
 
         let hours: i64 = time_parts[0].parse()?;
         let minutes: i64 = time_parts[1].parse()?;
@@ -81,45 +122,21 @@ impl Invoice {
         Ok(duration)
     }
 
-    fn calculate_total_time(&mut self) -> Result<f64, Box<dyn Error>> {
-        let mut total_time = 0.0;
-        for (_, time) in self.time_entries.iter() {
-            total_time += time;
-        }
-        Ok(round_to_hundredth(total_time))
-    }
-
-    fn calculate_time_per_entry(
-        &mut self,
+    fn parse_csv_entries(
         reader: &mut Reader<&[u8]>,
-    ) -> Result<(), Box<dyn Error>> {
-        for result in reader.records() {
-            let record = result?;
-            let project = &record[0];
-            let duration = Self::parse_duration(&record)?;
+    ) -> Result<Vec<(String, Duration)>, Box<dyn Error>> {
+        let entries: Vec<(String, Duration)> = reader
+            .records()
+            .filter_map(|r| r.ok())
+            .flat_map(|r| {
+                Ok::<(String, Duration), Box<dyn Error>>((
+                    r[0].to_owned(),
+                    Self::parse_duration_str(&r[3])?,
+                ))
+            })
+            .collect();
 
-            if let Some(time) = self.time_entries.get_mut(project) {
-                *time += round_to_hundredth(duration.num_seconds() as f64 / 3600.0)
-            } else {
-                self.time_entries.insert(
-                    project.to_string(),
-                    round_to_hundredth(duration.num_seconds() as f64 / 3600.0),
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    fn calculate_invoice(&mut self) -> Result<(), Box<dyn Error>> {
-        self.calculated_total_time = self.calculate_total_time()?;
-
-        self.calculated_subtotal = round_to_hundredth(self.calculated_total_time * self.pay_rate);
-        self.calculated_gst = round_to_hundredth(self.calculated_subtotal * self.gst_rate);
-        self.calculated_total =
-            self.calculated_subtotal + (self.calculated_subtotal * self.gst_rate);
-
-        Ok(())
+        Ok(entries)
     }
 }
 
@@ -130,29 +147,26 @@ impl std::fmt::Display for Invoice {
         // Format the time entries
         output.push_str(&format!("{:<30} {:>10}\n", "Project", "Hours"));
         output.push_str(&format!("{:-<41}\n", ""));
-        for (project, hours) in &self.time_entries {
+        for (project, hours) in &self.project_hours_logged {
             output.push_str(&format!("{:<30} {:>10.2}\n", project, hours));
         }
 
         // Format the totals
         output.push_str(&format!(
             "\n{:<30} {:>10.2}\n\n",
-            "Total Time (h)", self.calculated_total_time
+            "Total Time (h)", self.total_time
         ));
         output.push_str(&format!(
             "{:<30} {:>10.2}\n",
             &format!("Subtotal at ${}/hr", self.pay_rate),
-            self.calculated_subtotal
+            self.subtotal
         ));
         output.push_str(&format!(
             "{:<30} {:>10.2}\n",
             &format!("GST at {}%", self.gst_rate * 100.0),
-            self.calculated_gst
+            self.gst
         ));
-        output.push_str(&format!(
-            "{:<30} {:>10.2}\n",
-            "TOTAL", self.calculated_total
-        ));
+        output.push_str(&format!("{:<30} {:>10.2}\n", "TOTAL", self.total));
 
         write!(f, "{}", output)
     }
