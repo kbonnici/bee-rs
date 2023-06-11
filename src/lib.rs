@@ -1,38 +1,34 @@
-use std::{collections::HashMap, error::Error, fs::File, io::Read};
-
 use chrono::Duration;
-use clap::{arg, value_parser, ArgMatches, Command};
 use csv::{Reader, StringRecord};
+use std::{collections::HashMap, error::Error};
+
+use clap::Parser;
+use std::path::PathBuf;
+
+/// Generates an invoice from a CSV file
+#[derive(Parser, Debug)]
+#[command(author, version, about)]
+#[command(
+    help_template = "{about-section}\nAuthor: {author-with-newline}Version: {version}\n\n{usage-heading}\n{usage}\n\n{all-args}"
+)]
+pub struct Args {
+    /// The pay rate for the invoice
+    #[arg(short, long)]
+    pay_rate: f64,
+
+    /// The GST percentage for the invoice
+    #[arg(short, long)]
+    gst: Option<f64>,
+
+    /// The CSV file to read from
+    #[arg(short, long, value_name = "FILE")]
+    file: PathBuf,
+}
 
 fn round_to_hundredth(num: f64) -> f64 {
     (num * 100.0).round() / 100.0
 }
 
-pub fn parse_args() -> ArgMatches {
-    Command::new("pint-rs")
-        .version("0.1.0")
-        .author("Pint-RS <@kbonnici>")
-        .about("Generates an invoice from a CSV file")
-        .arg(
-            arg!(-p --pay_rate <VALUE>)
-                .required(true)
-                .value_parser(value_parser!(f64))
-                .help("The pay rate for the invoice"),
-        )
-        .arg(
-            arg!(-g --gst <VALUE>)
-                .required(false)
-                .default_value("0.05")
-                .value_parser(value_parser!(f64))
-                .help("The GST percentage for the invoice"),
-        )
-        .arg(
-            arg!(-f --file <FILE>)
-                .required(true)
-                .help("The CSV file to read from"),
-        )
-        .get_matches()
-}
 pub struct Invoice {
     time_entries: HashMap<String, f64>,
     total_time: f64,
@@ -43,66 +39,27 @@ pub struct Invoice {
     gst: f64,
 }
 
-// implement Display for Invoice
-impl std::fmt::Display for Invoice {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut output = String::new();
-
-        // Format the time entries
-        output.push_str(&format!("{:<30} {:>10}\n", "Project", "Hours"));
-        output.push_str(&format!("{:-<41}\n", ""));
-        for (project, hours) in &self.time_entries {
-            output.push_str(&format!("{:<30} {:>10.2}\n", project, hours));
-        }
-
-        // Format the totals
-        output.push_str(&format!(
-            "\n{:<30} {:>10.2}\n\n",
-            "Total Time (h)", self.total_time
-        ));
-        output.push_str(&format!(
-            "{:<30} {:>10.2}\n",
-            &format!("Subtotal at ${}/hr", self.pay_rate),
-            self.subtotal
-        ));
-        output.push_str(&format!(
-            "{:<30} {:>10.2}\n",
-            &format!("GST at {}%", self.gst_rate * 100.0),
-            self.gst
-        ));
-        output.push_str(&format!("{:<30} {:>10.2}\n", "TOTAL", self.total));
-
-        write!(f, "{}", output)
-    }
-}
-
 impl Invoice {
-    fn new(pay_rate: f64, gst_rate: f64) -> Self {
+    fn new(args: &Args) -> Self {
         Invoice {
             time_entries: HashMap::new(),
             total_time: 0.0,
             subtotal: 0.0,
             total: 0.0,
             gst: 0.0,
-            pay_rate,
-            gst_rate,
+            pay_rate: args.pay_rate,
+            gst_rate: args.gst.unwrap_or(0.0),
         }
     }
 
-    pub fn get_invoice(
-        pay_rate: f64,
-        gst: f64,
-        file_name: &String,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut invoice = Self::new(pay_rate, gst);
+    pub fn get_invoice(args: &Args) -> Result<Self, Box<dyn Error>> {
+        let mut invoice = Self::new(args);
 
-        let mut file = File::open(file_name)?;
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)?;
+        let contents = std::fs::read(&args.file)?;
 
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
-            .from_reader(contents.as_bytes());
+            .from_reader(contents.as_slice());
 
         invoice.calculate_time_per_entry(&mut reader)?;
         invoice.calculate_invoice()?;
@@ -165,5 +122,37 @@ impl Invoice {
         self.total = self.subtotal + (self.subtotal * self.gst_rate);
 
         Ok(())
+    }
+}
+
+impl std::fmt::Display for Invoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut output = String::new();
+
+        // Format the time entries
+        output.push_str(&format!("{:<30} {:>10}\n", "Project", "Hours"));
+        output.push_str(&format!("{:-<41}\n", ""));
+        for (project, hours) in &self.time_entries {
+            output.push_str(&format!("{:<30} {:>10.2}\n", project, hours));
+        }
+
+        // Format the totals
+        output.push_str(&format!(
+            "\n{:<30} {:>10.2}\n\n",
+            "Total Time (h)", self.total_time
+        ));
+        output.push_str(&format!(
+            "{:<30} {:>10.2}\n",
+            &format!("Subtotal at ${}/hr", self.pay_rate),
+            self.subtotal
+        ));
+        output.push_str(&format!(
+            "{:<30} {:>10.2}\n",
+            &format!("GST at {}%", self.gst_rate * 100.0),
+            self.gst
+        ));
+        output.push_str(&format!("{:<30} {:>10.2}\n", "TOTAL", self.total));
+
+        write!(f, "{}", output)
     }
 }
