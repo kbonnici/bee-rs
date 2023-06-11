@@ -9,9 +9,9 @@ fn round_to_hundredth(num: f64) -> f64 {
 }
 
 pub fn parse_args() -> ArgMatches {
-    Command::new("bee-rs")
+    Command::new("pint-rs")
         .version("0.1.0")
-        .author("Bee-RS <@kbonnici>")
+        .author("Pint-RS <@kbonnici>")
         .about("Generates an invoice from a CSV file")
         .arg(
             arg!(-p --pay_rate <VALUE>)
