@@ -1,10 +1,10 @@
 [package]
-name = "bee-rs"
+name = "pint-rs"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0"
 description = "Parse Toggl time-tracking CSV files to generate invoices"
-repository = "https://github.com/kbonnici/bee-rs"
+repository = "https://github.com/kbonnici/pint-rs"
 readme = "README.md"
 keywords = ["toggl", "csv", "invoice", "time-tracking", "beers"]
 

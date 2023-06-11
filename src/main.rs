@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use bee_rs::{parse_args, Invoice};
+use pint_rs::{parse_args, Invoice};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = parse_args();
