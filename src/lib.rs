@@ -54,7 +54,6 @@ impl std::fmt::Display for Invoice {
         for (project, hours) in &self.time_entries {
             output.push_str(&format!("{:<30} {:>10.2}\n", project, hours));
         }
-        // output.push_str(&format!("\n"));
 
         // Format the totals
         output.push_str(&format!(
