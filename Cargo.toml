@@ -14,3 +14,4 @@ keywords = ["toggl", "csv", "invoice", "time-tracking", "pintrs"]
 chrono = "0.4.26"
 clap = "4.3.3"
 csv = "1.2.2"
+time = "0.3.22"
