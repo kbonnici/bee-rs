@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let gst = *args.get_one::<f64>("gst").ok_or("Invalid gst")?;
 
-    let invoice = Invoice::get_invoice(pay_rate, gst, &file_name)?;
+    let invoice = Invoice::get_invoice(pay_rate, gst, file_name)?;
     println!("{}", invoice);
     Ok(())
 }
