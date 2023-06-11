@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
 use chrono::Duration;
-use csv::Reader;
-use std::{collections::HashMap, error::Error};
-
 use clap::Parser;
+use csv::Reader;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Generates an invoice from a CSV file
@@ -96,25 +96,33 @@ impl InvoiceBuilder {
         self
     }
 
-    pub fn import_csv(&mut self, file: &PathBuf) -> Result<&mut Self, Box<dyn Error>> {
-        let contents = std::fs::read(file)?;
+    pub fn import_csv(&mut self, file: &PathBuf) -> Result<&mut Self> {
+        let contents = std::fs::read(file)
+            .with_context(|| format!("Unable to read from given file \"{:?}\"", file))?;
 
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(true)
             .from_reader(contents.as_slice());
 
-        let entries = Self::parse_csv_entries(&mut reader)?;
+        let entries =
+            Self::parse_csv_entries(&mut reader).context("Unable to parse CSV entries")?;
         self.collect_time_entries(&entries);
 
         Ok(self)
     }
 
-    fn parse_duration_str(str: &str) -> Result<Duration, Box<dyn Error>> {
+    fn parse_duration_str(str: &str) -> Result<Duration> {
         let time_parts: Vec<&str> = str.split(':').collect();
 
-        let hours: i64 = time_parts[0].parse()?;
-        let minutes: i64 = time_parts[1].parse()?;
-        let seconds: i64 = time_parts[2].parse()?;
+        let hours: i64 = time_parts[0]
+            .parse()
+            .with_context(|| format!("Unable to parse hour string {}", time_parts[0]))?;
+        let minutes: i64 = time_parts[1]
+            .parse()
+            .with_context(|| format!("Unable to parse minutes string {}", time_parts[1]))?;
+        let seconds: i64 = time_parts[2]
+            .parse()
+            .with_context(|| format!("Unable to parse seconds string {}", time_parts[2]))?;
 
         let duration =
             Duration::hours(hours) + Duration::minutes(minutes) + Duration::seconds(seconds);
@@ -122,16 +130,15 @@ impl InvoiceBuilder {
         Ok(duration)
     }
 
-    fn parse_csv_entries(
-        reader: &mut Reader<&[u8]>,
-    ) -> Result<Vec<(String, Duration)>, Box<dyn Error>> {
+    fn parse_csv_entries(reader: &mut Reader<&[u8]>) -> Result<Vec<(String, Duration)>> {
         let entries: Vec<(String, Duration)> = reader
             .records()
             .filter_map(|r| r.ok())
             .flat_map(|r| {
-                Ok::<(String, Duration), Box<dyn Error>>((
+                Ok::<(String, Duration), anyhow::Error>((
                     r[0].to_owned(),
-                    Self::parse_duration_str(&r[3])?,
+                    Self::parse_duration_str(&r[3])
+                        .with_context(|| format!("Unable to parse duration {}", &r[3]))?,
                 ))
             })
             .collect();
