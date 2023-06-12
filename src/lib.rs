@@ -121,13 +121,13 @@ impl InvoiceBuilder {
 
         let hours: i64 = time_parts[0]
             .parse()
-            .with_context(|| format!("Unable to parse hour string {}", time_parts[0]))?;
+            .with_context(|| format!("Unable to parse hour string \"{}\"", time_parts[0]))?;
         let minutes: i64 = time_parts[1]
             .parse()
-            .with_context(|| format!("Unable to parse minutes string {}", time_parts[1]))?;
+            .with_context(|| format!("Unable to parse minutes string \"{}\"", time_parts[1]))?;
         let seconds: i64 = time_parts[2]
             .parse()
-            .with_context(|| format!("Unable to parse seconds string {}", time_parts[2]))?;
+            .with_context(|| format!("Unable to parse seconds string \"{}\"", time_parts[2]))?;
 
         let duration =
             Duration::hours(hours) + Duration::minutes(minutes) + Duration::seconds(seconds);
@@ -143,7 +143,7 @@ impl InvoiceBuilder {
                 Ok::<(String, Duration), anyhow::Error>((
                     r[0].to_owned(),
                     Self::parse_duration_str(&r[3])
-                        .with_context(|| format!("Unable to parse duration {}", &r[3]))?,
+                        .with_context(|| format!("Unable to parse duration \"{}\"", &r[3]))?,
                 ))
             })
             .collect();
